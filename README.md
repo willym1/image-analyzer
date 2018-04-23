@@ -23,31 +23,39 @@ func Run(logging bool) {
 ```
 Prints
 ```
-Elapsed: 17.0285ms
+-----apple.jpg-----
+Elapsed: 17.526ms
 Image size: 400 x 456
-Average RGB of apple.jpg: [164.48085 80.440674 78.99653]
+Average RGB: 164 80 79
 
-ERROR: gradient.gif - File extension not supported.
+-----gradient.gif-----
+ERROR: - File extension not supported.
 
-Elapsed: 25.0413ms
+-----green-apple.jpeg-----
+Elapsed: 23.0251ms
 Image size: 510 x 490
-Average RGB of green-apple.jpeg: [146.45868 182.07582 92.9763]
+Average RGB: 146 182 93
 
-Elapsed: 22.5255ms
+-----louise-belcher.png-----
+Elapsed: 33.0317ms
 Image size: 343 x 603
-Average RGB of louise-belcher.png: [174.96744 137.9245 99.00828]
+Average RGB: 175 138 99
 
-Elapsed: 48.058ms
+-----orange-full.jpg-----
+Elapsed: 49.0464ms
 Image size: 780 x 400
-Average RGB of orange-full.jpg: [242.04344 140.11331 27.245275]
+Average RGB: 242 140 27
 
-Elapsed: 29.0161ms
+-----orange.jpg-----
+Elapsed: 30.0287ms
 Image size: 520 x 520
-Average RGB of orange.jpg: [248.61993 148.3836 58.055096]
+Average RGB: 249 148 58
 
-ERROR: invalidimage - open ./gallery/invalidimage: The system cannot find the file specified.
+-----invalidimage-----
+ERROR: - open ./gallery/invalidimage: The system cannot find the file specified.
 
-Elapsed: 105.6415ms
+-----skyline.jpg-----
+Elapsed: 105.1003ms
 Image size: 1300 x 796
-Average RGB of skyline.jpg: [68.83822 51.30977 64.37151]
+Average RGB: 69 51 64
 ```

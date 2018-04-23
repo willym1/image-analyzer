@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -37,14 +38,18 @@ func NewImages(fns []string, l bool) Images {
 			if l {
 				n := time.Now()
 				s := imgd.Size()
+				rgb := imgd.RGBAvgs()
 
+				fmt.Printf("-----%s-----\n", v)
 				fmt.Printf("Elapsed: %s\n", n.Sub(start))
 				fmt.Printf("Image size: %d x %d\n", s.X, s.Y)
-				fmt.Printf("Average RGB of %s: %v\n\n", v, imgd.RGBAvgs())
+				fmt.Printf("Average RGB: %v %v %v\n", math.Round(float64(rgb[0])), math.Round(float64(rgb[1])), math.Round(float64(rgb[2])))
+				fmt.Println("")
 			}
 
-		} else {
-			fmt.Printf("ERROR: %s - %s\n\n", v, err)
+		} else if l {
+			fmt.Printf("-----%s-----\n", v)
+			fmt.Printf("ERROR: - %s\n\n", err)
 		}
 	}
 
