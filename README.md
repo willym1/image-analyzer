@@ -24,38 +24,50 @@ func Run(logging bool) {
 Prints
 ```
 -----apple.jpg-----
-Elapsed: 18.0172ms
+Elapsed: 30.0206ms
 Image size: 400 x 456
-Average RGB: 164 80 79
+Average RGB: 165 81 80
+Valid pixels: 127336
 
 -----gradient.gif-----
 ERROR: File extension not supported.
 
 -----green-apple.jpeg-----
-Elapsed: 22.5211ms
+Elapsed: 61.079ms
 Image size: 510 x 490
-Average RGB: 146 182 93
-
------louise-belcher.png-----
-Elapsed: 23.0281ms
-Image size: 343 x 603
-Average RGB: 175 138 99
-
------orange-full.jpg-----
-Elapsed: 48.0457ms
-Image size: 780 x 400
-Average RGB: 242 140 27
-
------orange.jpg-----
-Elapsed: 30.5293ms
-Image size: 520 x 520
-Average RGB: 249 148 58
+Average RGB: 147 182 94
+Valid pixels: 170773
 
 -----invalidimage-----
 ERROR: open ./gallery/invalidimage: The system cannot find the file specified.
 
+-----louise-belcher.png-----
+Elapsed: 67.064ms
+Image size: 343 x 603
+Average RGB: 175 138 99
+Valid pixels: 44549
+
+-----orange-full.jpg-----
+Elapsed: 48.0498ms
+Image size: 780 x 400
+Average RGB: 242 140 27
+Valid pixels: 312000
+
+-----orange.jpg-----
+Elapsed: 64.0615ms
+Image size: 520 x 520
+Average RGB: 249 149 58
+Valid pixels: 168931
+
+-----red-blocks.png-----
+Elapsed: 6.509ms
+Image size: 250 x 250
+Average RGB: 255 44 44
+Valid pixels: 48939
+
 -----skyline.jpg-----
-Elapsed: 104.6241ms
+Elapsed: 122.6534ms
 Image size: 1300 x 796
 Average RGB: 69 51 64
+Valid pixels: 1034632
 ```

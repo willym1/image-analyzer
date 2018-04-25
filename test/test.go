@@ -8,10 +8,11 @@ func Run(logging bool) {
         "apple.jpg",
 		"gradient.gif",
 		"green-apple.jpeg",
+		"invalidimage",
         "louise-belcher.png",
         "orange-full.jpg",
-		"orange.jpg",
-		"invalidimage",
+        "orange.jpg",
+        "red-blocks.png",
         "skyline.jpg",
     }
     autoimage.NewImages(images, logging)
