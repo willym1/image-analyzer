@@ -9,11 +9,13 @@ import (
     "math"
     "os"
     "path/filepath"
+    "sync"
     "time"
 )
 
 var (
     filterProfile FilterProfile
+    wg sync.WaitGroup
 )
 
 type ImageManager struct {
@@ -26,19 +28,22 @@ Receives a string of filenames then
 make new image data from each image
 */
 func NewImages(fns []string, l bool) ImageManager {
-    items := make([]ImageManagerItem, len(fns))
+    var items []ImageManagerItem
     filterProfile = FilterProfile{
         contiguous: false,
     }
 
-    for i, v := range fns {
-        imageData, error := newImageData(v)
-        item := ImageManagerItem{
-            imageData,
-            error,
-            v,
-        }
-        items[i] = item
+    ch := make(chan ImageManagerItem, len(fns))
+    for _, v := range fns {
+        wg.Add(1)
+        go newImageData(v, ch)
+    }
+
+    wg.Wait()
+    close(ch)
+    
+    for v := range ch {
+        items = append(items, v)
     }
 
     manager := ImageManager{items: items, Logging: l}
@@ -105,13 +110,18 @@ type ImageData struct {
     validPixels int
 }
 
-func newImageData(filename string) (imageData, error) {
+func newImageData(filename string, c chan ImageManagerItem) {
+    defer wg.Done()
     start := time.Now()
+
+    item := ImageManagerItem{filename: filename}
 
     // looks for the filename in gallery folder
     reader, err := os.Open(fmt.Sprintf("./gallery/%s", filename))
     if err != nil {
-        return nil, err
+        item.error = err
+        c <- item
+        return
     }
     
     // determine how the file should be decoded from its extension
@@ -122,7 +132,9 @@ func newImageData(filename string) (imageData, error) {
         case ".png":
             image, _ = png.Decode(reader)
         default:
-            return nil, errors.New("File extension not supported.")
+            item.error = errors.New("File extension not supported.")
+            c <- item
+            return
     }
     
     maxBounds := image.Bounds().Max
@@ -136,7 +148,8 @@ func newImageData(filename string) (imageData, error) {
     imgd.CalcAverages()
     imgd.SetElapsed(start, time.Now())
 
-    return imgd, nil
+    item.imageData = imgd
+    c <- item
 }
 
 func (imgd *ImageData) SetElapsed(start, end time.Time) {
@@ -320,6 +333,7 @@ type Pixel struct {
     rgba []uint8
     black bool
     white bool
+    tested bool
     valid bool
     x int
     y int
@@ -337,13 +351,13 @@ func (pixel *Pixel) IsBlack() bool {
 Test if pixel is valid
 */
 func (pixel *Pixel) Invalidate() bool {
-    // invalidate black or white pixels
-    if pixel.valid {
+    if !pixel.tested {
+        pixel.tested = true
+    
         if pixel.white || pixel.rgba[3] == 0 {
             pixel.valid = false
             return true
         }
     }
-    
     return false
 }
