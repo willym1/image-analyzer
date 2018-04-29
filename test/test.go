@@ -1,6 +1,6 @@
 package test
 
-import "github.com/willym1/image-analyzer/autoimage"
+import "github.com/willym1/image-analyzer/analyzer"
 
 /* Test images */
 func Run(logging bool) {
@@ -15,5 +15,5 @@ func Run(logging bool) {
         "red-blocks.png",
         "skyline.jpg",
     }
-    autoimage.NewImages(images, logging)
+    analyzer.NewImages(images, logging)
 }

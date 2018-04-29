@@ -1,4 +1,4 @@
-package autoimage
+package analyzer
 
 import (
     "errors"
@@ -12,50 +12,61 @@ import (
     "time"
 )
 
-type Images struct {
-    images []imageData
-    logging bool
+type ImageManager struct {
+    items []ImageManagerItem
+    Logging bool
 }
 
 /*
 Receives a string of filenames then
 make new image data from each image
 */
-func NewImages(fns []string, l bool) Images {
-    var images []imageData
-    for _, v := range fns {
-        // log information if enabled
-        var start time.Time
-        if l {
-            start = time.Now()
+func NewImages(fns []string, l bool) ImageManager {
+    items := make([]ImageManagerItem, len(fns))
+
+    for i, v := range fns {
+        imageData, error := newImageData(v)
+        item := ImageManagerItem{
+            imageData,
+            error,
+            v,
         }
-
-        imgd, err := initImageData(v)
-        if err == nil {
-            images = append(images, imgd)
-            
-            // log information if enabled
-            if l {
-                n := time.Now()
-                s := imgd.Size()
-                rgb := imgd.RGBAvgs()
-
-                fmt.Printf("-----%s-----\n", v)
-                fmt.Printf("Elapsed: %s\n", n.Sub(start))
-                fmt.Printf("Image size: %d x %d\n", s.X, s.Y)
-                fmt.Printf("Average RGB: %v %v %v\n", math.Round(float64(rgb[0])), math.Round(float64(rgb[1])), math.Round(float64(rgb[2])))
-                fmt.Printf("Valid pixels: %d\n", imgd.ValidPixels())
-                fmt.Println("")
-            }
-
-        } else if l {
-            fmt.Printf("-----%s-----\n", v)
-            fmt.Printf("ERROR: %s\n\n", err)
-        }
+        items[i] = item
     }
 
-    ai := Images{images: images, logging: l}
-    return ai
+    manager := ImageManager{items: items, Logging: l}
+    if manager.Logging {
+        manager.Log()
+    }
+
+    return manager
+}
+
+func (manager ImageManager) Log() {
+    for _, v := range manager.items {
+        if v.imageData != nil {
+            size := v.imageData.Size()
+            rgb := v.imageData.RGBAvgs()
+    
+            fmt.Printf("-----%s-----\n", v.filename)
+            fmt.Printf("Elapsed: %s\n", v.imageData.Elapsed())
+            fmt.Printf("Image size: %d x %d\n", size.X, size.Y)
+            fmt.Printf("Average RGB: %v %v %v\n", math.Round(float64(rgb[0])), math.Round(float64(rgb[1])), math.Round(float64(rgb[2])))
+            fmt.Printf("Valid pixels: %d\n", v.imageData.ValidPixels())
+
+        } else {
+            fmt.Printf("-----%s-----\n", v.filename)
+            fmt.Printf("ERROR: %s\n", v.error)
+        }
+        fmt.Println("")
+    }
+}
+
+type ImageManagerItem struct {
+    imageData
+    error
+
+    filename string
 }
 
 type imageData interface {
@@ -66,21 +77,25 @@ type imageData interface {
     RGBAt(int, int) []uint8
     CalcAverages() []float32
     ValidPixels() int
+    Elapsed() time.Duration
+
+    SetElapsed(start, end time.Time)
 }
 
 type ImageData struct {
     image image.Image
     size image.Point
+    elapsed time.Duration
 
     pixels [][]Pixel
     rgbSums []uint
     rgbAvgs []float32
     validPixels int
-
-    ignoreEdges bool
 }
 
-func initImageData(filename string) (imageData, error) {
+func newImageData(filename string) (imageData, error) {
+    start := time.Now()
+
     // looks for the filename in gallery folder
     reader, err := os.Open(fmt.Sprintf("./gallery/%s", filename))
     if err != nil {
@@ -102,14 +117,18 @@ func initImageData(filename string) (imageData, error) {
     imgd := &ImageData{
         image: image,
         size: maxBounds,
-        ignoreEdges: true,
     }
     
     imgd.Scan()
     imgd.FilterPixels()
     imgd.CalcAverages()
+    imgd.SetElapsed(start, time.Now())
 
     return imgd, nil
+}
+
+func (imgd *ImageData) SetElapsed(start, end time.Time) {
+    imgd.elapsed = end.Sub(start)
 }
 
 func (imgd *ImageData) RGBAvgs() []float32 {
@@ -122,6 +141,10 @@ func (imgd *ImageData) Size() image.Point {
 
 func (imgd *ImageData) ValidPixels() int {
     return imgd.validPixels
+}
+
+func (imgd *ImageData) Elapsed() time.Duration {
+    return imgd.elapsed
 }
 
 /*
@@ -297,7 +320,7 @@ func (pixel *Pixel) Validate() bool {
 }
 
 /*
-Test if pixel is valid with a second one that's invalid
+Test if pixel is valid against a second, invalid pixel
 */
 func (pixel *Pixel) ValidateWith(withP Pixel) bool {
     // invalidate if it matches with the invalid pixel
