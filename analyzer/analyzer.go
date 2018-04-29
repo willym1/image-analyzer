@@ -12,6 +12,10 @@ import (
     "time"
 )
 
+var (
+    filterProfile FilterProfile
+)
+
 type ImageManager struct {
     items []ImageManagerItem
     Logging bool
@@ -23,6 +27,9 @@ make new image data from each image
 */
 func NewImages(fns []string, l bool) ImageManager {
     items := make([]ImageManagerItem, len(fns))
+    filterProfile = FilterProfile{
+        contiguous: false,
+    }
 
     for i, v := range fns {
         imageData, error := newImageData(v)
@@ -46,12 +53,12 @@ func (manager ImageManager) Log() {
     for _, v := range manager.items {
         if v.imageData != nil {
             size := v.imageData.Size()
-            rgb := v.imageData.RGBAvgs()
+            rgba := v.imageData.RGBAAvgs()
     
             fmt.Printf("-----%s-----\n", v.filename)
             fmt.Printf("Elapsed: %s\n", v.imageData.Elapsed())
             fmt.Printf("Image size: %d x %d\n", size.X, size.Y)
-            fmt.Printf("Average RGB: %v %v %v\n", math.Round(float64(rgb[0])), math.Round(float64(rgb[1])), math.Round(float64(rgb[2])))
+            fmt.Printf("Average RGB: %v %v %v\n", math.Round(float64(rgba[0])), math.Round(float64(rgba[1])), math.Round(float64(rgba[2])))
             fmt.Printf("Valid pixels: %d\n", v.imageData.ValidPixels())
 
         } else {
@@ -62,6 +69,11 @@ func (manager ImageManager) Log() {
     }
 }
 
+type FilterProfile struct {
+    contiguous bool
+
+}
+
 type ImageManagerItem struct {
     imageData
     error
@@ -70,11 +82,11 @@ type ImageManagerItem struct {
 }
 
 type imageData interface {
-    RGBAvgs() []float32
+    RGBAAvgs() []float32
     Size() image.Point
 
     Scan() [][]Pixel
-    RGBAt(int, int) []uint8
+    RGBAAt(int, int) []uint8
     CalcAverages() []float32
     ValidPixels() int
     Elapsed() time.Duration
@@ -88,8 +100,8 @@ type ImageData struct {
     elapsed time.Duration
 
     pixels [][]Pixel
-    rgbSums []uint
-    rgbAvgs []float32
+    rgbaSums []uint
+    rgbaAvgs []float32
     validPixels int
 }
 
@@ -131,8 +143,8 @@ func (imgd *ImageData) SetElapsed(start, end time.Time) {
     imgd.elapsed = end.Sub(start)
 }
 
-func (imgd *ImageData) RGBAvgs() []float32 {
-    return imgd.rgbAvgs
+func (imgd *ImageData) RGBAAvgs() []float32 {
+    return imgd.rgbaAvgs
 }
 
 func (imgd *ImageData) Size() image.Point {
@@ -149,13 +161,13 @@ func (imgd *ImageData) Elapsed() time.Duration {
 
 /*
 Iterate each pixel in the image.
-Each pixel's RGB values are stored in a 3d array
-and the sums of all RGB colors are collected.
+Each pixel's RGBA values are stored in a 3d array
+and the sums of all RGBA colors are collected.
 */
 func (imgd *ImageData) Scan() [][]Pixel {
     // reset props
     imgd.validPixels = 0
-    imgd.rgbSums = make([]uint, 3)
+    imgd.rgbaSums = make([]uint, 4)
     imgd.pixels = make([][]Pixel, imgd.size.Y)
 
     for y := 0; y < imgd.size.Y; y++ {
@@ -164,7 +176,7 @@ func (imgd *ImageData) Scan() [][]Pixel {
         // assign each nested entry a pixel
         for x := 0; x < imgd.size.X; x++ {
             pixel := Pixel{
-                rgb: imgd.RGBAt(x, y)[:3],
+                rgba: imgd.RGBAAt(x, y),
                 valid: true,
                 x: x,
                 y: y,
@@ -182,14 +194,15 @@ func (imgd *ImageData) Scan() [][]Pixel {
 }
 
 /*
-Get the uint32 RGB values then convert it to uint8 (0-255)
+Get the uint32 RGBA values then convert it to uint8 (0-255)
 */
-func (imgd *ImageData) RGBAt(x, y int) []uint8 {
-    r, g, b, _ := imgd.image.At(x, y).RGBA()
+func (imgd *ImageData) RGBAAt(x, y int) []uint8 {
+    r, g, b, a := imgd.image.At(x, y).RGBA()
     return []uint8{
         uint8(r>>8),
         uint8(g>>8),
         uint8(b>>8),
+        uint8(a>>8),
     }
 }
 
@@ -197,40 +210,54 @@ func (imgd *ImageData) RGBAt(x, y int) []uint8 {
 Iterate each pixel to check its validity, then collect data of the ones that are valid.
 */
 func (imgd *ImageData) FilterPixels() {
-    // will first gather invalid pixels on image's borders
-    invalidPixels := []Pixel{}
-    // run through the top and bottom image border
-    for x := 0; x < imgd.size.X; x++ {
-        topPixel := &imgd.pixels[0][x]
-        if topPixel.Validate() {
-            invalidPixels = append(invalidPixels, *topPixel)
+    if filterProfile.contiguous {
+        // will first gather invalid pixels on image's borders
+        invalidPixels := []Pixel{}
+        // run through the top and bottom image border
+        for x := 0; x < imgd.size.X; x++ {
+            topPixel := &imgd.pixels[0][x]
+            if topPixel.Invalidate() {
+                invalidPixels = append(invalidPixels, *topPixel)
+            }
+            btmPixel := &imgd.pixels[imgd.size.Y-1][x]
+            if btmPixel.Invalidate() {
+                invalidPixels = append(invalidPixels, *btmPixel)
+            }
         }
-        btmPixel := &imgd.pixels[imgd.size.Y-1][x]
-        if btmPixel.Validate() {
-            invalidPixels = append(invalidPixels, *btmPixel)
+        // run through left and right image border
+        for y := 1; y < imgd.size.Y-1; y++ {
+            leftPixel := &imgd.pixels[y][0]
+            if leftPixel.Invalidate() {
+                invalidPixels = append(invalidPixels, *leftPixel)
+            }
+            rightPixel := &imgd.pixels[y][imgd.size.X-1]
+            if rightPixel.Invalidate() {
+                invalidPixels = append(invalidPixels, *rightPixel)
+            }
         }
-    }
-    // run through left and right image border
-    for y := 1; y < imgd.size.Y-1; y++ {
-        leftPixel := &imgd.pixels[y][0]
-        if leftPixel.Validate() {
-            invalidPixels = append(invalidPixels, *leftPixel)
+        // check adjacent pixels of the invalid border pixels
+        imgd.FilterAdjacent(invalidPixels)
+    
+        // process data of valid pixels
+        for _, pixelRow := range imgd.pixels {
+            for _, pixel := range pixelRow {
+                if pixel.valid {
+                    imgd.validPixels++
+                    for i, v := range pixel.rgba {
+                        imgd.rgbaSums[i] += uint(v)
+                    }
+                }
+            }
         }
-        rightPixel := &imgd.pixels[y][imgd.size.X-1]
-        if rightPixel.Validate() {
-            invalidPixels = append(invalidPixels, *rightPixel)
-        }
-    }
-    // check adjacent pixels of the invalid border pixels
-    imgd.FilterAdjacent(invalidPixels)
 
-    // process data of valid pixels
-    for _, pixelRow := range imgd.pixels {
-        for _, pixel := range pixelRow {
-            if pixel.valid {
-                imgd.validPixels++
-                for i, v := range pixel.rgb {
-                    imgd.rgbSums[i] += uint(v)
+    } else {
+        for _, pixelRow := range imgd.pixels {
+            for _, pixel := range pixelRow {
+                if !pixel.Invalidate() {
+                    imgd.validPixels++
+                    for i, v := range pixel.rgba {
+                        imgd.rgbaSums[i] += uint(v)
+                    }
                 }
             }
         }
@@ -245,25 +272,25 @@ func (imgd *ImageData) FilterAdjacent(invalidPixels []Pixel) {
     for _, p := range invalidPixels {
         if p.x > 0 {
             leftPixel := &imgd.pixels[p.y][p.x-1]
-            if leftPixel.ValidateWith(p) {
+            if leftPixel.Invalidate() {
                 newInvalidPixels = append(newInvalidPixels, *leftPixel)
             }
         }
         if p.x < imgd.size.X - 1 {
             rightPixel := &imgd.pixels[p.y][p.x+1]
-            if rightPixel.ValidateWith(p) {
+            if rightPixel.Invalidate() {
                 newInvalidPixels = append(newInvalidPixels, *rightPixel)
             }
         }
         if p.y > 0 {
             topPixel := &imgd.pixels[p.y-1][p.x]
-            if topPixel.ValidateWith(p) {
+            if topPixel.Invalidate() {
                 newInvalidPixels = append(newInvalidPixels, *topPixel)
             }
         }
         if p.y < imgd.size.Y - 1 {
             btmPixel := &imgd.pixels[p.y+1][p.x]
-            if btmPixel.ValidateWith(p) {
+            if btmPixel.Invalidate() {
                 newInvalidPixels = append(newInvalidPixels, *btmPixel)
             }
         }
@@ -276,21 +303,21 @@ func (imgd *ImageData) FilterAdjacent(invalidPixels []Pixel) {
 }
 
 /*
-Calculate the average RGB values from the total of valid pixels
+Calculate the average RGBA values from the total of valid pixels
 */
 func (imgd *ImageData) CalcAverages() []float32 {
     // reset averages
-    imgd.rgbAvgs = make([]float32, 3)
+    imgd.rgbaAvgs = make([]float32, 4)
 
-    for i, v := range imgd.rgbSums {
-        imgd.rgbAvgs[i] = float32(v) / float32(imgd.validPixels)
+    for i, v := range imgd.rgbaSums {
+        imgd.rgbaAvgs[i] = float32(v) / float32(imgd.validPixels)
     }
     
-    return imgd.rgbAvgs
+    return imgd.rgbaAvgs
 }
 
 type Pixel struct {
-    rgb []uint8
+    rgba []uint8
     black bool
     white bool
     valid bool
@@ -299,35 +326,24 @@ type Pixel struct {
 }
 
 func (pixel *Pixel) IsWhite() bool {
-    return pixel.rgb[0] == 255 && pixel.rgb[1] == 255 && pixel.rgb[2] == 255
+    return pixel.rgba[0] == 255 && pixel.rgba[1] == 255 && pixel.rgba[2] == 255
 }
 
 func (pixel *Pixel) IsBlack() bool {
-    return pixel.rgb[0] == 0 && pixel.rgb[1] == 0 && pixel.rgb[2] == 0
+    return pixel.rgba[0] == 0 && pixel.rgba[1] == 0 && pixel.rgba[2] == 0
 }
 
 /*
 Test if pixel is valid
 */
-func (pixel *Pixel) Validate() bool {
+func (pixel *Pixel) Invalidate() bool {
     // invalidate black or white pixels
-    if pixel.white || pixel.black {
-        pixel.valid = false
-        return true
+    if pixel.valid {
+        if pixel.white || pixel.rgba[3] == 0 {
+            pixel.valid = false
+            return true
+        }
     }
     
-    return false
-}
-
-/*
-Test if pixel is valid against a second, invalid pixel
-*/
-func (pixel *Pixel) ValidateWith(withP Pixel) bool {
-    // invalidate if it matches with the invalid pixel
-    if pixel.valid && ((pixel.black && withP.black) || (pixel.white && withP.white)) {
-        pixel.valid = false
-        return true
-    }
-
     return false
 }
