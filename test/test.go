@@ -3,7 +3,7 @@ package test
 import "github.com/willym1/image-analyzer/analyzer"
 
 /* Test images */
-func Run(logging bool) {
+func Run() {
     images := []string{
         "apple.jpg",
 		"gradient.gif",
@@ -15,5 +15,5 @@ func Run(logging bool) {
         "red-blocks.png",
         "skyline.jpg",
     }
-    analyzer.NewImages(images, logging)
+    analyzer.NewImages(images, true)
 }
