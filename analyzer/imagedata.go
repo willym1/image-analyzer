@@ -5,8 +5,6 @@ import (
 	"fmt"
     "path/filepath"
     "image"
-    "image/jpeg"
-    "image/png"
     "os"
     "time"
 )
@@ -54,10 +52,8 @@ func newImageData(filename string, c chan ImageManagerItem) {
     // determine how the file should be decoded from its extension
     var image image.Image
     switch filepath.Ext(filename) {
-        case ".jpg", ".jpeg":
-            image, _ = jpeg.Decode(reader)
-        case ".png":
-            image, _ = png.Decode(reader)
+        case ".jpg", ".jpeg", ".png":
+            image, _ = image.Decode(reader)
         default:
             item.error = errors.New("File extension not supported.")
             c <- item
