@@ -7,10 +7,12 @@ import (
 	"mime/multipart"
     "log"
 	"net/http"
+	"os"
 	"strings"
 )
 
 func Serve() {
+	
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		mediaType, params, mimeErr := mime.ParseMediaType(req.Header.Get("Content-Type"))
 
@@ -35,5 +37,5 @@ func Serve() {
 		}
 	})
 	
-	log.Fatal(http.ListenAndServe(":3001", nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), nil))
 }

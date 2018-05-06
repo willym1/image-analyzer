@@ -91,9 +91,13 @@ func ImagesFromParts(partReader *multipart.Reader) ImageManager {
     return ImageManager{items}
 }
 
+/*
+Processes each image
+*/
 func (manager ImageManager) ProcessItems() {
     ch := make(chan *ImageData, len(manager.Items))
     
+    // loop through images
     for _, item := range manager.Items {
         if item.ImageData != nil {
             wg.Add(1)
@@ -132,8 +136,10 @@ type ImageManagerItem struct {
     Filename string
 }
 
+/*
+Decodes the image then assigns it to the item
+*/
 func (item *ImageManagerItem) Decode(reader io.Reader) {
-    // determine how the file should be decoded from its extension
     img, _, err := image.Decode(reader)
     if err != nil {
         item.Error = err
