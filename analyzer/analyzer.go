@@ -29,7 +29,6 @@ type FilterProfile struct {
 
 type ImageManager struct {
     items []ImageManagerItem
-    Logging bool
 }
 
 type ImageManagerItem struct {
@@ -40,31 +39,32 @@ type ImageManagerItem struct {
 }
 
 /*
-Receives a string of filenames then
-make new image data from each image
+Receives a string of filenames then make new image data from each image
 */
-func NewImages(filenames []string, l bool) ImageManager {
+func ImagesFromFilenames(filenames []string) ImageManager {
     var items []ImageManagerItem
-
-    ch := make(chan ImageManagerItem, len(filenames))
+    
     for _, filename := range filenames {
-        wg.Add(1)
-        go newImageData(filename, ch)
+        item := newImageData(filename)
+        items = append(items, item)
+    }
+    manager := ImageManager{items}
+    
+    return manager
+}
+
+func (manager ImageManager) ProcessItems() {
+    ch := make(chan *ImageData, len(manager.items))
+
+    for _, item := range manager.items {
+        if item.imageData != nil {
+            wg.Add(1)
+            go item.imageData.Process(ch)
+        }
     }
 
     wg.Wait()
     close(ch)
-    
-    for item := range ch {
-        items = append(items, item)
-    }
-
-    manager := ImageManager{items: items, Logging: l}
-    if manager.Logging {
-        manager.Log()
-    }
-
-    return manager
 }
 
 func (manager ImageManager) Log() {

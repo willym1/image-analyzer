@@ -5,6 +5,8 @@ import (
 	"fmt"
     "path/filepath"
     "image"
+    "image/jpeg"
+    "image/png"
     "os"
     "time"
 )
@@ -12,13 +14,10 @@ import (
 type imageData interface {
     RGBAAvgs() []float32
     Size() image.Point
-
-    Scan() [][]Pixel
-    RGBAAt(int, int) []uint8
-    CalcAverages() []float32
     ValidPixels() int
     Elapsed() time.Duration
-
+    
+    Process(c chan *ImageData)
     SetElapsed(start, end time.Time)
 }
 
@@ -35,48 +34,49 @@ type ImageData struct {
     validPixels int
 }
 
-func newImageData(filename string, c chan ImageManagerItem) {
-    defer wg.Done()
-
-    start := time.Now()
+func newImageData(filename string) ImageManagerItem {
     item := ImageManagerItem{filename: filename}
 
     // looks for the filename in gallery folder
     reader, err := os.Open(fmt.Sprintf("./gallery/%s", filename))
-    if err != nil {
+    
+    if err == nil {
+        var img image.Image
+        // determine how the file should be decoded from its extension
+        switch filepath.Ext(filename) {
+            case ".jpg", ".jpeg":
+                img, _ = jpeg.Decode(reader)
+            case ".png":
+                img, _ = png.Decode(reader)
+            default:
+                item.error = errors.New("File extension not supported.")
+        }
+        
+        if item.error == nil {
+            maxBounds := img.Bounds().Max
+            item.imageData = &ImageData{
+                image: img,
+                size: maxBounds,
+            }
+        }
+        
+    } else {
         item.error = err
-        c <- item
-        return
     }
-    
-    // determine how the file should be decoded from its extension
-    var image image.Image
-    switch filepath.Ext(filename) {
-        case ".jpg", ".jpeg", ".png":
-            image, _ = image.Decode(reader)
-        default:
-            item.error = errors.New("File extension not supported.")
-            c <- item
-            return
-    }
-    
-    maxBounds := image.Bounds().Max
-    imgd := &ImageData{
-        image: image,
-        size: maxBounds,
-    }
-    
+
+    return item
+}
+
+func (imgd *ImageData) Process(c chan *ImageData) {
+    defer wg.Done()
+
+    start := time.Now() // start timer
     imgd.Scan()
     imgd.FilterPixels()
     imgd.CalcAverages()
     imgd.SetElapsed(start, time.Now()) // end timer
     
-    item.imageData = imgd
-    c <- item
-}
-
-func (imgd *ImageData) SetElapsed(start, end time.Time) {
-    imgd.elapsed = end.Sub(start)
+    c <- imgd
 }
 
 func (imgd *ImageData) RGBAAvgs() []float32 {
@@ -93,6 +93,10 @@ func (imgd *ImageData) ValidPixels() int {
 
 func (imgd *ImageData) Elapsed() time.Duration {
     return imgd.elapsed
+}
+
+func (imgd *ImageData) SetElapsed(start, end time.Time) {
+    imgd.elapsed = end.Sub(start)
 }
 
 /*

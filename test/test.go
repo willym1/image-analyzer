@@ -4,7 +4,7 @@ import "github.com/willym1/image-analyzer/analyzer"
 
 /* Test images */
 func Run() {
-    images := []string{
+    filenames := []string{
         "apple.jpg",
 		"gradient.gif",
 		"green-apple.jpeg",
@@ -15,5 +15,7 @@ func Run() {
         "red-blocks.png",
         "skyline.jpg",
     }
-    analyzer.NewImages(images, true)
+    manager := analyzer.ImagesFromFilenames(filenames)
+    manager.ProcessItems()
+    manager.Log()
 }
