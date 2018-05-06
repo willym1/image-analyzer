@@ -4,7 +4,7 @@ type Pixel struct {
     rgba []uint8
     white, black, tested bool
     state uint8
-    x, y int
+    X, Y int
 }
 
 func (pixel *Pixel) IsWhite() bool {

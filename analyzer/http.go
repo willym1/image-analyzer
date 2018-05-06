@@ -1,10 +1,8 @@
 package analyzer
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
-	"image"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
     "log"
@@ -12,7 +10,7 @@ import (
 	"strings"
 )
 
-func NewServer() {
+func Serve() {
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		mediaType, params, mimeErr := mime.ParseMediaType(req.Header.Get("Content-Type"))
 
@@ -23,21 +21,17 @@ func NewServer() {
 			
 
 		} else {
-			reader := multipart.NewReader(req.Body, params["boundary"])
-			part, _ := reader.NextPart()
-	
-			b, _ := ioutil.ReadAll(part)
-			bytesReader := bytes.NewReader(b)
-			_, format, err := image.Decode(bytesReader)
+			partReader := multipart.NewReader(req.Body, params["boundary"])
+			manager := ImagesFromParts(partReader)
+			manager.ProcessItems()
 
-			if err != nil {
-				fmt.Println("Error decoding image")
+			bytes, err := json.Marshal(manager)
 
+			if err == nil {
+				fmt.Fprint(w, string(bytes[:]))
 			} else {
-				fmt.Println(format)
+				fmt.Fprint(w, err)
 			}
-
-			fmt.Fprintln(w, "test")
 		}
 	})
 	

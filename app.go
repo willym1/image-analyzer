@@ -1,11 +1,7 @@
 package main
 
-import (
-    // "github.com/willym1/image-analyzer/analyzer"
-    "github.com/willym1/image-analyzer/test"
-)
+import "github.com/willym1/image-analyzer/analyzer"
 
 func main() {
-    // analyzer.Server()
-    test.Run()
+    analyzer.Serve()
 }

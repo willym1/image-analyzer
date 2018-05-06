@@ -1,70 +1,31 @@
 package analyzer
 
 import (
-	"errors"
-	"fmt"
-    "path/filepath"
     "image"
-    "image/jpeg"
-    "image/png"
-    "os"
     "time"
 )
 
 type imageData interface {
-    RGBAAvgs() []float32
-    Size() image.Point
-    ValidPixels() int
-    Elapsed() time.Duration
+    GetRgbaAvgs() []float32
+    GetSize() image.Point
+    GetValidPixels() int
+    GetBorders() []Pixel
+    GetElapsed() time.Duration
     
     Process(c chan *ImageData)
-    SetElapsed(start, end time.Time)
 }
 
 type ImageData struct {
     image image.Image
-    size image.Point
-    elapsed time.Duration
+    Size image.Point
+    Elapsed time.Duration
 
     pixels [][]Pixel
-    borders []Pixel
+    Borders []Pixel
 
     rgbaSums []uint
-    rgbaAvgs []float32
-    validPixels int
-}
-
-func newImageData(filename string) ImageManagerItem {
-    item := ImageManagerItem{filename: filename}
-
-    // looks for the filename in gallery folder
-    reader, err := os.Open(fmt.Sprintf("./gallery/%s", filename))
-    
-    if err == nil {
-        var img image.Image
-        // determine how the file should be decoded from its extension
-        switch filepath.Ext(filename) {
-            case ".jpg", ".jpeg":
-                img, _ = jpeg.Decode(reader)
-            case ".png":
-                img, _ = png.Decode(reader)
-            default:
-                item.error = errors.New("File extension not supported.")
-        }
-        
-        if item.error == nil {
-            maxBounds := img.Bounds().Max
-            item.imageData = &ImageData{
-                image: img,
-                size: maxBounds,
-            }
-        }
-        
-    } else {
-        item.error = err
-    }
-
-    return item
+    RgbaAvgs []float32
+    ValidPixels int
 }
 
 func (imgd *ImageData) Process(c chan *ImageData) {
@@ -74,29 +35,29 @@ func (imgd *ImageData) Process(c chan *ImageData) {
     imgd.Scan()
     imgd.FilterPixels()
     imgd.CalcAverages()
-    imgd.SetElapsed(start, time.Now()) // end timer
+    imgd.Elapsed = time.Now().Sub(start) // end timer
     
     c <- imgd
 }
 
-func (imgd *ImageData) RGBAAvgs() []float32 {
-    return imgd.rgbaAvgs
+func (imgd *ImageData) GetRgbaAvgs() []float32 {
+    return imgd.RgbaAvgs
 }
 
-func (imgd *ImageData) Size() image.Point {
-    return imgd.size
+func (imgd *ImageData) GetSize() image.Point {
+    return imgd.Size
 }
 
-func (imgd *ImageData) ValidPixels() int {
-    return imgd.validPixels
+func (imgd *ImageData) GetValidPixels() int {
+    return imgd.ValidPixels
 }
 
-func (imgd *ImageData) Elapsed() time.Duration {
-    return imgd.elapsed
+func (imgd *ImageData) GetBorders() []Pixel {
+    return imgd.Borders
 }
 
-func (imgd *ImageData) SetElapsed(start, end time.Time) {
-    imgd.elapsed = end.Sub(start)
+func (imgd *ImageData) GetElapsed() time.Duration {
+    return imgd.Elapsed
 }
 
 /*
@@ -106,19 +67,19 @@ and the sums of all RGBA colors are collected.
 */
 func (imgd *ImageData) Scan() [][]Pixel {
     // reset props
-    imgd.validPixels = 0
+    imgd.ValidPixels = 0
     imgd.rgbaSums = make([]uint, 4)
-    imgd.pixels = make([][]Pixel, imgd.size.Y)
+    imgd.pixels = make([][]Pixel, imgd.Size.Y)
 
-    for y := 0; y < imgd.size.Y; y++ {
-        pixelRow := make([]Pixel, imgd.size.X)
+    for y := 0; y < imgd.Size.Y; y++ {
+        pixelRow := make([]Pixel, imgd.Size.X)
         
         // assign each nested entry a pixel
-        for x := 0; x < imgd.size.X; x++ {
+        for x := 0; x < imgd.Size.X; x++ {
             pixel := Pixel{
                 rgba: imgd.RGBAAt(x, y),
-                x: x,
-                y: y,
+                X: x,
+                Y: y,
             }
             pixel.white = pixel.IsWhite()
             pixel.black = pixel.IsBlack()
@@ -149,29 +110,29 @@ func (imgd *ImageData) RGBAAt(x, y int) []uint8 {
 Iterate each pixel to check its validity, then collect data of the ones that are valid.
 */
 func (imgd *ImageData) FilterPixels() {
-    imgd.borders = []Pixel{}
+    imgd.Borders = []Pixel{}
 
     if filterProfile.contiguous {
         // will first gather invalid pixels on image's edges
         invalidPixels := []Pixel{}
         // run through the top and bottom image edge
-        for x := 0; x < imgd.size.X; x++ {
+        for x := 0; x < imgd.Size.X; x++ {
             topPixel := &imgd.pixels[0][x]
             if !imgd.Validate(topPixel) {
                 invalidPixels = append(invalidPixels, *topPixel)
             }
-            btmPixel := &imgd.pixels[imgd.size.Y-1][x]
+            btmPixel := &imgd.pixels[imgd.Size.Y-1][x]
             if !imgd.Validate(btmPixel) {
                 invalidPixels = append(invalidPixels, *btmPixel)
             }
         }
         // run through left and right image edge
-        for y := 1; y < imgd.size.Y-1; y++ {
+        for y := 1; y < imgd.Size.Y-1; y++ {
             leftPixel := &imgd.pixels[y][0]
             if !imgd.Validate(leftPixel) {
                 invalidPixels = append(invalidPixels, *leftPixel)
             }
-            rightPixel := &imgd.pixels[y][imgd.size.X-1]
+            rightPixel := &imgd.pixels[y][imgd.Size.X-1]
             if !imgd.Validate(rightPixel) {
                 invalidPixels = append(invalidPixels, *rightPixel)
             }
@@ -183,7 +144,7 @@ func (imgd *ImageData) FilterPixels() {
         for _, pixelRow := range imgd.pixels {
             for _, pixel := range pixelRow {
                 if pixel.state != states.invalid {
-                    imgd.validPixels++
+                    imgd.ValidPixels++
                     for i, v := range pixel.rgba {
                         imgd.rgbaSums[i] += uint(v)
                     }
@@ -195,7 +156,7 @@ func (imgd *ImageData) FilterPixels() {
         for _, pixelRow := range imgd.pixels {
             for _, pixel := range pixelRow {
                 if imgd.Validate(&pixel) {
-                    imgd.validPixels++
+                    imgd.ValidPixels++
                     for i, v := range pixel.rgba {
                         imgd.rgbaSums[i] += uint(v)
                     }
@@ -211,26 +172,26 @@ From an array of invalid pixels, check all adjacent pixels for its validity.
 func (imgd *ImageData) FilterAdjacent(invalidPixels []Pixel) {
     newInvalidPixels := []Pixel{}
     for _, p := range invalidPixels {
-        if p.x > 0 {
-            leftPixel := &imgd.pixels[p.y][p.x-1]
+        if p.X > 0 {
+            leftPixel := &imgd.pixels[p.Y][p.X-1]
             if !imgd.Validate(leftPixel) {
                 newInvalidPixels = append(newInvalidPixels, *leftPixel)
             }
         }
-        if p.x < imgd.size.X - 1 {
-            rightPixel := &imgd.pixels[p.y][p.x+1]
+        if p.X < imgd.Size.X - 1 {
+            rightPixel := &imgd.pixels[p.Y][p.X+1]
             if !imgd.Validate(rightPixel) {
                 newInvalidPixels = append(newInvalidPixels, *rightPixel)
             }
         }
-        if p.y > 0 {
-            topPixel := &imgd.pixels[p.y-1][p.x]
+        if p.Y > 0 {
+            topPixel := &imgd.pixels[p.Y-1][p.X]
             if !imgd.Validate(topPixel) {
                 newInvalidPixels = append(newInvalidPixels, *topPixel)
             }
         }
-        if p.y < imgd.size.Y - 1 {
-            btmPixel := &imgd.pixels[p.y+1][p.x]
+        if p.Y < imgd.Size.Y - 1 {
+            btmPixel := &imgd.pixels[p.Y+1][p.X]
             if !imgd.Validate(btmPixel) {
                 newInvalidPixels = append(newInvalidPixels, *btmPixel)
             }
@@ -248,7 +209,7 @@ func (imgd *ImageData) Validate(pixel *Pixel) bool {
         pixel.Test()
         
         if pixel.state == states.valid && filterProfile.contiguous {
-            imgd.borders = append(imgd.borders, *pixel)
+            imgd.Borders = append(imgd.Borders, *pixel)
         }
 
         return pixel.state != states.invalid
@@ -262,11 +223,11 @@ Calculate the average RGBA values from the total of valid pixels
 */
 func (imgd *ImageData) CalcAverages() []float32 {
     // reset averages
-    imgd.rgbaAvgs = make([]float32, 4)
+    imgd.RgbaAvgs = make([]float32, 4)
 
     for i, v := range imgd.rgbaSums {
-        imgd.rgbaAvgs[i] = float32(v) / float32(imgd.validPixels)
+        imgd.RgbaAvgs[i] = float32(v) / float32(imgd.ValidPixels)
     }
     
-    return imgd.rgbaAvgs
+    return imgd.RgbaAvgs
 }

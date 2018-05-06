@@ -1,8 +1,16 @@
 package analyzer
 
 import (
+	"bytes"
     "fmt"
+    "image"
+    _ "image/jpeg"
+    _ "image/png"
+    "io"
+    "io/ioutil"
     "math"
+    "mime/multipart"
+    "os"
     "sync"
 )
 
@@ -28,14 +36,7 @@ type FilterProfile struct {
 }
 
 type ImageManager struct {
-    items []ImageManagerItem
-}
-
-type ImageManagerItem struct {
-    imageData
-    error
-
-    filename string
+    Items []ImageManagerItem
 }
 
 /*
@@ -45,44 +46,104 @@ func ImagesFromFilenames(filenames []string) ImageManager {
     var items []ImageManagerItem
     
     for _, filename := range filenames {
-        item := newImageData(filename)
+        item := ImageManagerItem{Filename: filename}
+
+        // looks for the filename in gallery folder
+        reader, err := os.Open(fmt.Sprintf("./gallery/%s", filename))
+        
+        if err == nil {
+            item.Decode(reader)
+        } else {
+            item.Error = err
+        }
+
         items = append(items, item)
     }
-    manager := ImageManager{items}
     
-    return manager
+    return ImageManager{items}
 }
 
-func (manager ImageManager) ProcessItems() {
-    ch := make(chan *ImageData, len(manager.items))
+/*
+Decodes images from a multipart reader
+*/
+func ImagesFromParts(partReader *multipart.Reader) ImageManager {
+    var items []ImageManagerItem
+    var err error
 
-    for _, item := range manager.items {
-        if item.imageData != nil {
-            wg.Add(1)
-            go item.imageData.Process(ch)
+    // loop all parts until EOF
+    for err == nil {
+        var part *multipart.Part
+        part, err = partReader.NextPart()
+
+        if err == nil {
+            var byts []byte
+            byts, err = ioutil.ReadAll(part)
+            bytesReader := bytes.NewReader(byts)
+    
+            if err == nil {
+                item := ImageManagerItem{Filename: part.FileName()}
+                item.Decode(bytesReader)
+                items = append(items, item)
+            }
         }
     }
 
+    return ImageManager{items}
+}
+
+func (manager ImageManager) ProcessItems() {
+    ch := make(chan *ImageData, len(manager.Items))
+    
+    for _, item := range manager.Items {
+        if item.ImageData != nil {
+            wg.Add(1)
+            go item.ImageData.Process(ch)
+        }
+    }
+    
     wg.Wait()
     close(ch)
 }
 
 func (manager ImageManager) Log() {
-    for _, v := range manager.items {
-        if v.imageData != nil {
-            size := v.imageData.Size()
-            rgba := v.imageData.RGBAAvgs()
+    for _, item := range manager.Items {
+        if item.ImageData != nil {
+            size := item.ImageData.GetSize()
+            rgba := item.ImageData.GetRgbaAvgs()
     
-            fmt.Printf("-----%s-----\n", v.filename)
-            fmt.Printf("Elapsed: %s\n", v.imageData.Elapsed())
+            fmt.Printf("-----%s-----\n", item.Filename)
+            fmt.Printf("Elapsed: %s\n", item.ImageData.GetElapsed())
             fmt.Printf("Image size: %d x %d\n", size.X, size.Y)
             fmt.Printf("Average RGB: %v %v %v\n", math.Round(float64(rgba[0])), math.Round(float64(rgba[1])), math.Round(float64(rgba[2])))
-            fmt.Printf("Valid pixels: %d\n", v.imageData.ValidPixels())
+            fmt.Printf("Valid pixels: %d\n", item.ImageData.GetValidPixels())
 
         } else {
-            fmt.Printf("-----%s-----\n", v.filename)
-            fmt.Printf("ERROR: %s\n", v.error)
+            fmt.Printf("-----%s-----\n", item.Filename)
+            fmt.Printf("ERROR: %s\n", item.Error)
         }
         fmt.Println("")
+    }
+}
+
+type ImageManagerItem struct {
+    ImageData imageData
+    Error error
+
+    Filename string
+}
+
+func (item *ImageManagerItem) Decode(reader io.Reader) {
+    // determine how the file should be decoded from its extension
+    img, _, err := image.Decode(reader)
+    if err != nil {
+        item.Error = err
+    }
+    
+    if item.Error == nil {
+        maxBounds := img.Bounds().Max
+        item.ImageData = &ImageData{
+            image: img,
+            Size: maxBounds,
+        }
     }
 }
